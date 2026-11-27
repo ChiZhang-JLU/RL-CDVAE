@@ -152,6 +152,8 @@ A small portion of the reinforcement learning implementation is adapted from [Mo
 
 We employ [CGCNN](https://github.com/txie-93/cgcnn) and [ComFormer](https://github.com/divelab/AIRS/tree/main/OpenMat/ComFormer) as surrogate models for crystal property prediction.
 
+All third-party code remains subject to its respective original license.
+
 We sincerely thank the authors and contributors of these projects for making their code publicly available and facilitating further research in this field.
 
 ## Citation
