@@ -9,7 +9,8 @@ This project builds upon the [Crystal Diffusion Variational Autoencoder (CDVAE)]
 - [Installation](#installation)
 - [Datasets](#datasets)
 - [RL-CDVAE Workflow](rl-cdvae-workflow)
-- [Repository layout](#repository-layout)
+- [Citation](#citation)
+- [Contact](#contact)
 
 ## Installation
 
@@ -148,4 +149,4 @@ python scripts/compute_metrics.py --root_path MODEL_PATH --tasks gen
 
 ## Contact
 
-Please leave an issue or reach out to the [author](czhang26@mails.jlu.edu.cn) if you have any questions.
+Please leave an issue or reach out to the author(czhang26@mails.jlu.edu.cn) if you have any questions.
