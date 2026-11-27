@@ -143,6 +143,16 @@ python scripts/compute_metrics.py --root_path MODEL_PATH --tasks gen
 
 `MODEL_PATH` will be the path to the trained model. All evaluation metrics will be saved in `eval_metrics.json`.
 
+## Acknowledgements
+
+This project builds upon the [Crystal Diffusion Variational Autoencoder (CDVAE)](https://github.com/txie-93/cdvae) framework.
+
+A small portion of the reinforcement learning implementation is adapted from [MolRL](https://github.com/Cellarity/MolRL), and the adapted code remains subject to its original license.
+
+We employ [CGCNN](https://github.com/txie-93/cgcnn) and [ComFormer](https://github.com/divelab/AIRS/tree/main/OpenMat/ComFormer) as surrogate models for crystal property prediction.
+
+We sincerely thank the authors and contributors of these projects for making their code publicly available and facilitating further research in this field.
+
 ## Citation
 
 
