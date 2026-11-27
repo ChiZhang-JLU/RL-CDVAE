@@ -146,11 +146,11 @@ python scripts/compute_metrics.py --root_path MODEL_PATH --tasks gen
 
 ## Acknowledgements
 
-This project builds upon the [Crystal Diffusion Variational Autoencoder (CDVAE)](https://github.com/txie-93/cdvae) framework.
+This project builds upon the [CDVAE](https://github.com/txie-93/cdvae) framework.
 
 A small portion of the reinforcement learning implementation is adapted from [MolRL](https://github.com/Cellarity/MolRL), and the adapted code remains subject to its original license.
 
-We employ [CGCNN](https://github.com/txie-93/cgcnn) and [ComFormer](https://github.com/divelab/AIRS/tree/main/OpenMat/ComFormer) as surrogate models for crystal property prediction.
+We employ [ComFormer](https://github.com/divelab/AIRS/tree/main/OpenMat/ComFormer) and [CGCNN](https://github.com/txie-93/cgcnn) as surrogate models for crystal property prediction.
 
 All third-party code remains subject to its respective original license.
 
