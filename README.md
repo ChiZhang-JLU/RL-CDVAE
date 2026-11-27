@@ -6,128 +6,146 @@ This project builds upon the [Crystal Diffusion Variational Autoencoder (CDVAE)]
 
 ## Contents
 
-- [Setup](#setup)
-- [Example workflow on MP-20](#example-workflow-on-mp-20)
-  1. [Train the CDVAE](#1-train-the-cdvae)
-  2. [Evaluate the CDVAE predictor](#2-evaluate-the-cdvae-predictor)
-  3. [Train the PPO sampling policy](#3-train-the-ppo-sampling-policy)
-  4. [Generate structures and save a test reference](#4-generate-structures-and-save-a-test-reference)
-  5. [Compute generation metrics](#5-compute-generation-metrics)
-- [Outputs](#outputs)
+- [Installation](#installation)
+- [Datasets](#datasets)
+- [RL-CDVAE Workflow](rl-cdvae-workflow)
 - [Repository layout](#repository-layout)
 
-## Setup
+## Installation
 
-Run the commands from the repository root in a Linux Bash shell. The training configuration requests one CUDA GPU by default. The shell scripts are examples for a Slurm cluster. The Python commands below can also run directly on a GPU machine.
+We recommend using Conda for environment management, which can be downloaded from the [official Conda website](https://docs.conda.io/).
 
-Use a Python environment with these dependencies.
+### GPU machines
 
-- **Training and sampling** use PyTorch, PyTorch Lightning, PyTorch Geometric, `torch-scatter`, `torch-sparse`, Hydra, OmegaConf, `python-dotenv`, SymPy, and `wandb`.
-- **Crystal data and evaluation** use NumPy, pandas, SciPy, scikit-learn, pymatgen, NetworkX, `p_tqdm`, `tqdm`, Matplotlib, SMACT, and matminer.
-- **PPO and ComFormer** also use `jarvis-tools`, `e3nn`, `pandarallel`, and the Pydantic v1 API. The current ComFormer code imports Python's legacy `imp` module.
-
-The repository does not pin dependency versions. Match the PyTorch Geometric extensions to your PyTorch and CUDA builds, and use a PyTorch Lightning release that supports the `Trainer` arguments in [`cdvae/run.py`](cdvae/run.py). The model loaders also expect a PyTorch environment that can load the serialized scaler objects produced during training.
-
-From the repository root, make the local modules available on the Python path.
-
+Create the environment using the `env.yml` file:
 ```bash
-export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+conda env create -f env.yml
+```
+Activate the conda environment with `conda activate cdvae`.
+
+Install this package with `pip install -e .`.
+
+### Faster installation
+
+An alternative way to install the required packages more quickly is:
+```bash
+conda env create -f env_sub.yml
+conda activate cdvae
+conda install ipywidgets jupyterlab matplotlib pylint
+conda install -c conda-forge matminer=0.7.3 nglview pymatgen=2020.12.31
+# Downgrade to fix a known issue with pytorch
+python3 -m pip install setuptools==59.5.0
+pip install -e .
 ```
 
-Use [`.env.template`](.env.template) as a starting point for a local `.env`. Set the paths to match your checkout, then create the output and log directories.
+### Setting up environment variables
 
-```bash
-export PROJECT_ROOT="/absolute/path/to/rl-cdvae"
-export HYDRA_JOBS="/absolute/path/to/rl-cdvae/hydra"
-export WABDB_DIR="/absolute/path/to/rl-cdvae/wandb"
+Make a copy of the `.env.template` file and rename it to `.env`. Modify the following environment variables in `.env`.
+
+- `PROJECT_ROOT`: path to the folder that contains this repo
+- `HYDRA_JOBS`: path to a folder to store hydra outputs
+- `WABDB`: path to a folder to store wabdb outputs
+
+## Datasets
+
+All datasets are directly available on `data/` with train/val/test splits. If you use these datasets, please consider to cite the original papers from which we curate these datasets.
+
+## RL-CDVAE Workflow
+
+### CDVAE Pretraining
+
+Our custom Predictor module is enabled by default. Therefore, before training CDVAE, ensure that the target property is correctly configured in `conf/predictor/default.yaml`.
+
+To train a CDVAE, run the following command:
+
 ```
-
-`WABDB_DIR` is the variable spelling used by the Hydra configuration for the W&B log directory. Before running the predictor evaluation, set `font_path` in [`scripts/predictor_evaluate.py`](scripts/predictor_evaluate.py) to a font file available on your machine. If you use Slurm, update the partition, environment activation, library paths, and experiment arguments in the launchers to match your cluster and run.
-
-## Example workflow on MP-20
-
-This example trains a CDVAE with a band-gap prediction head and uses the ComFormer surrogate to guide generation toward larger predicted band gaps. Use one CDVAE model directory throughout and the same label for both sampling and evaluation.
-
-### 1. Train the CDVAE
-
-Check that [`data/mp_20`](data/mp_20) contains `train.csv`, `val.csv`, and `test.csv`. Each split contains crystal structures as CIF text in the `cif` column, sample identifiers in `material_id`, and property labels including `band_gap`.
-
-```bash
 python cdvae/run.py data=mp_20 expname=mp_20
 ```
 
-The training run writes `hparams.yaml`, a `.ckpt` checkpoint, `lattice_scaler.pt`, and `prop_scaler.pt` under `$HYDRA_JOBS/singlerun/<date>/mp_20/`. Set `MODEL_DIR` to that run's absolute path.
+To use other datasets, use `data=con_mp_20` and `data=oqmd_20` instead. The corresponding configuration files are located in `conf/data/`.
+
+After training, model checkpoints can be found in `$HYDRA_JOBS/singlerun/YYYY-MM-DD/expname`.
+
+### Predictor Evaluation
+
+After training CDVAE, you can optionally evaluate the performance of our custom Predictor module:
 
 ```bash
-MODEL_DIR="/absolute/path/to/hydra/singlerun/YYYY-MM-DD/mp_20"
-LABEL="ppo_bg_max"
+python scripts/predictor_evaluate.py --model_path MODEL_PATH --prop PROPERTY_NAME
 ```
 
-### 2. Evaluate the CDVAE predictor
+- `MODEL_PATH`: The path to the trained model.
+- `PROPERTY_NAME`: The target property to be evaluated. Currently, `band_gap` and `formation_energy` are supported.
+
+The evaluation results are saved as PNG files in the `MODEL_PATH` directory.
+
+Users can modify `scripts/predictor_evaluate.py` to support additional properties as needed.
+
+### RL Modulation
+
+Perform reinforcement learning training to modulation the sampling distribution in the latent space:
 
 ```bash
-python scripts/predictor_evaluate.py \
-  --model_path "$MODEL_DIR" \
-  --prop band_gap
+python scripts/train_ppo.py --model_path MODEL_PATH --surrogate SURROGATE_MODEL --data DATA --task TASK --reward_type REWARD_TYPE --target TARGET --epochs EPOCHS
 ```
 
-The script evaluates the CDVAE's latent-space prediction head on the configured test split. It saves `band_gap_scatter.png` with the MAE, MSE, RMSE, and R² annotated on the plot.
+- `MODEL_PATH`: The path to the trained CDVAE model.
+- `SURROGATE_MODEL`: The surrogate model used for property prediction. Currently, [ComFormer](https://github.com/divelab/AIRS/tree/main/OpenMat/ComFormer) and [CGCNN](https://github.com/txie-93/cgcnn) are supported.
+- `DATA`: The dataset to be used. Supported options are `mp_20`, `con_mp_20`, and `oqmd_20`.
+- `TASK`: The target property to be optimized. Supported options are `band_gap` and `formation_energy`.
+- `REWARD_TYPE`: The type of optimization objective. Supported options are:
+  - `max_prop`: Maximize the target property.
+  - `min_prop`: Minimize the target property.
+  - `single_target`: Optimize the target property toward a specified value.
+  - `interval_target`: Optimize the target property to fall within a specified interval.
+- `TARGET`: The target value or interval for optimization. This argument is only used when `REWARD_TYPE` is set to `single_target` or `interval_target`.
+  - For `single_target`: e.g., `3` or `-3`.
+  - For `interval_target`: e.g., `3~5` or `-2~1`.
+- `EPOCHS`: The number of training epochs.
 
-### 3. Train the PPO sampling policy
+The results are saved in the `{TASK}_{TARGET}` subdirectory under `MODEL_PATH`.
 
-The MP-20 band-gap example reads a `best*.pt` checkpoint and `scaler.pt` from [`comformer/mp_20/band_gap`](comformer/mp_20/band_gap). The example keeps PPO's W&B logs local by running in offline mode.
+Users can modify `scripts/train_ppo.py` to accommodate their specific optimization tasks and define custom reward functions in `ppo/reward.py` as needed.
+
+### Generation
+
+Once reinforcement learning training has converged, crystal structures can be generated using the following command:
 
 ```bash
-WANDB_MODE=offline python scripts/train_ppo.py \
-  --model_path "$MODEL_DIR" \
-  --predictor comformer --data mp_20 --task band_gap \
-  --reward_type max_prop --epochs 300 --batch_size 32
+python scripts/evaluate.py --model_path MODEL_PATH --tasks gen --ppo_task PPO_TASK --ppo --filter_z
 ```
 
-The policy and its training logs go into `$MODEL_DIR/band_gap_max/`. The generator loads `best_policy_net.pt` from this directory. Other available reward modes are `min_prop`, `single_target`, and `interval_target`. For fixed and interval targets, use `--target` with a numeric value or a `lower~upper` range. Match the surrogate checkpoint to the dataset and property you select.
+- `MODEL_PATH`: The path to the trained CDVAE model.
+- `PPO_TASK`: The directory containing the trained reinforcement learning agent, located within the `MODEL_PATH` directory.
+- `--ppo`: Enable the trained reinforcement learning agent to optimize latent variables during generation.
+- `--filter_z`: Enable our custom Predictor module to filter latent variables during generation.
 
-### 4. Generate structures and save a test reference
+The generated crystal structures are saved as `.pt` files in the `MODEL_PATH` directory.
 
-```bash
-python scripts/evaluate.py \
-  --model_path "$MODEL_DIR" \
-  --tasks recon gen --label "$LABEL" \
-  --ppo --ppo_task band_gap_max
+These files are PyTorch serialized files containing multiple tensors that describe the structures of `M` materials batched together. Each material may contain a different number of atoms, with `N` denoting the total number of atoms across all materials. `num_evals` denotes the number of Langevin dynamics runs performed for each material.
+
+- `frac_coords`: Fractional coordinates of each atom, shape `(num_evals, N, 3)`.
+- `atom_types`: Atomic number of each atom, shape `(num_evals, N)`.
+- `lengths`: Lattice lengths, shape `(num_evals, M, 3)`.
+- `angles`: Lattice angles, shape `(num_evals, M, 3)`.
+- `num_atoms`: Number of atoms in each material, shape `(num_evals, M)`.
+
+We recommend specifying the additional `--label` argument during generation to distinguish the output files from different generation tasks.
+
+### 5. Generation Metrics Evaluation
+
+To compute evaluation metrics, run the following command:
+
+```
+python scripts/compute_metrics.py --root_path MODEL_PATH --tasks gen
 ```
 
-`gen` samples new crystal structures with the learned policy. `recon` reconstructs the configured test set and saves the input structures used as the reference for evaluation. To generate a baseline from the same CDVAE, omit `--ppo` and `--ppo_task` and choose a new label.
+`MODEL_PATH` will be the path to the trained model. All evaluation metrics will be saved in `eval_metrics.json`.
 
-### 5. Compute generation metrics
+## Citation
 
-```bash
-python scripts/compute_metrics.py \
-  --root_path "$MODEL_DIR" \
-  --tasks gen --label "$LABEL"
-```
 
-The evaluator reads `eval_gen_<label>.pt` and the reference structures from `eval_recon_<label>.pt`. Both files need the same label. Generation metrics require at least 500 valid generated crystals in the first decoding repeat. The JSON report covers composition and structure validity, fingerprint diversity, density and element-count distributions, and coverage of the test set.
 
-## Outputs
+## Contact
 
-| Path relative to `MODEL_DIR` | Contents |
-| --- | --- |
-| `hparams.yaml`, `*.ckpt`, `lattice_scaler.pt`, `prop_scaler.pt` | CDVAE configuration, weights, and scalers |
-| `band_gap_scatter.png` | Test-set predictions and regression metrics |
-| `band_gap_max/best_policy_net.pt` | PPO policy used for generation |
-| `band_gap_max/train_metrics.csv`, `band_gap_max/reward_curve.png` | PPO training statistics and reward history |
-| `eval_gen_ppo_bg_max.pt`, `eval_recon_ppo_bg_max.pt` | Generated and reconstructed structures, with test inputs in the reconstruction file |
-| `eval_metrics_ppo_bg_max.json` | Summary statistics for the generated structures |
-
-The structure files store fractional coordinates (`frac_coords`), atomic numbers (`atom_types`), atoms per crystal (`num_atoms`), lattice lengths (`lengths`), and lattice angles (`angles`) as tensors.
-
-## Repository layout
-
-| Location | Purpose |
-| --- | --- |
-| [`cdvae/`](cdvae), [`conf/`](conf) | Crystal model, data loading, and Hydra configuration |
-| [`ppo/`](ppo), [`comformer/`](comformer), [`cgcnn/`](cgcnn) | Policy training and crystal property surrogates |
-| [`scripts/`](scripts) | Predictor evaluation, PPO training, sampling, and metrics |
-| [`data/`](data) | Dataset splits and dataset notes |
-| [`train.sh`](train.sh), [`predictor_evaluate.sh`](predictor_evaluate.sh), [`ppo.sh`](ppo.sh), [`gen.sh`](gen.sh), [`metrics.sh`](metrics.sh) | Example Slurm launchers in workflow order |
-
-See the [dataset notes](data/README.md) for upstream benchmark references and the [MP-20 notes](data/mp_20/README.md) for dataset background.
+Please leave an issue or reach out to the [author](czhang26@mails.jlu.edu.cn) if you have any questions.
