@@ -10,6 +10,7 @@ This project builds upon the [Crystal Diffusion Variational Autoencoder (CDVAE)]
 - [Datasets](#datasets)
 - [RL-CDVAE Workflow](rl-cdvae-workflow)
 - [Citation](#citation)
+- [Acknowledgements](#acknowledgements)
 - [Contact](#contact)
 
 ## Installation
