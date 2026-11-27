@@ -134,7 +134,7 @@ These files are PyTorch serialized files containing multiple tensors that descri
 
 We recommend specifying the additional `--label` argument during generation to distinguish the output files from different generation tasks.
 
-### 5. Generation Metrics Evaluation
+### Generation Metrics Evaluation
 
 To compute evaluation metrics, run the following command:
 
